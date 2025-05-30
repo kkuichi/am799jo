@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Compare Toxicity Detectors</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      min-height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f9f9f9;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .container {
+      display: flex;
+      margin-top: 40px;
+      gap: 40px;
+      max-width: 1500px;
+      width: 100%;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .main, .history {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+      flex: 1;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      min-height: 800px;
+    }
+
+    .main h1, .main h2, .history h2 {
+      text-align: center;
+      margin: 0 0 1rem 0;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      flex-shrink: 0;
+    }
+
+    textarea {
+      width: 100%;
+      height: 150px;
+      font-size: 1rem;
+      padding: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      resize: none;
+      font-family: monospace;
+      box-sizing: border-box;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+
+    .check-button {
+      display: flex;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .check-button button {
+      background-color: #007bff;
+      color: white;
+      font-size: 1rem;
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .check-button button:disabled,
+    .history-buttons button:disabled {
+      background-color: #999 !important;
+      cursor: not-allowed;
+    }
+
+    .scrollable-table {
+      max-height: 550px;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+      table-layout: fixed;
+    }
+
+    th, td {
+      padding: 0.7rem;
+      border-bottom: 1px solid #eee;
+      text-align: center;
+      vertical-align: top;
+    }
+
+    th {
+      background-color: #f4f4f4;
+      font-weight: bold;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    td:first-child, th:first-child {
+      max-width: 250px;
+      min-width: 200px;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+
+    tr.high { background-color: #ffe6e6; }
+    tr.medium { background-color: #fff4cc; }
+    tr.low { background-color: #e6ffe6; }
+
+    .spacer {
+      flex-grow: 1;
+    }
+
+    .history-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: auto;
+      flex-shrink: 0;
+    }
+
+    .history-buttons button {
+      background-color: #007bff;
+      color: white;
+      font-size: 0.95rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .history-buttons button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="main">
+      <form method="post">
+        <h1>Compare Toxicity Detectors</h1>
+        <textarea name="text" id="input-text" placeholder="Enter English text..." maxlength="512"></textarea>
+
+        <div class="check-button">
+          <button type="submit" name="action" value="check" id="check-button" disabled>Check Toxicity</button>
+        </div>
+
+        <h2>Results</h2>
+        <div class="scrollable-table">
+          {% if result %}
+          <table>
+            <tr>
+              <th>Model</th>
+              <th>Toxicity Score</th>
+              <th>Latency (ms)</th>
+            </tr>
+            {% for model, output in result.items() %}
+            {% set val = output.score if output.score is number else 0 %}
+            <tr class="{% if val >= 0.7 %}high{% elif val >= 0.4 %}medium{% else %}low{% endif %}">
+              <td>{{ model }}</td>
+              <td>{{ output.score }}</td>
+              <td>{{ output.latency }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% else %}
+          <div style="text-align:center; color: #aaa;">No results yet</div>
+          {% endif %}
+        </div>
+      </form>
+      <div class="spacer"></div>
+    </div>
+
+    <div class="history">
+      <h2>History</h2>
+
+      <div class="scrollable-table">
+        <table id="history-table">
+          <tr>
+            <th>Input</th>
+            <th>Tiny</th>
+            <th>RoBERTa</th>
+            <th>BERT</th>
+          </tr>
+          {% for row in history %}
+          <tr>
+            <td>{{ row.text }}</td>
+            <td>{{ row.tiny }}</td>
+            <td>{{ row.roberta }}</td>
+            <td>{{ row.bert }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+
+      <form method="post" class="history-buttons">
+        <button type="submit" name="action" value="download" id="download-btn">Download CSV</button>
+        <button type="submit" name="action" value="clear" id="clear-btn">Clear History</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const inputText = document.getElementById('input-text');
+    const checkBtn = document.getElementById('check-button');
+    const downloadBtn = document.getElementById('download-btn');
+    const clearBtn = document.getElementById('clear-btn');
+
+    function updateButtons() {
+      checkBtn.disabled = inputText.value.trim() === "";
+      const historyRows = document.querySelectorAll('#history-table tr').length;
+      const hasHistory = historyRows > 1;
+      downloadBtn.disabled = !hasHistory;
+      clearBtn.disabled = !hasHistory;
+    }
+
+    inputText.addEventListener("input", updateButtons);
+    window.addEventListener("load", updateButtons);
+  </script>
+</body>
+</html>
